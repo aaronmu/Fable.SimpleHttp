@@ -185,65 +185,68 @@ module Http =
 
     /// Sends the request to the server, this function does not throw
     let send (req: HttpRequest) : Async<HttpResponse> =
-#if FABLE_COMPILER
-        Async.FromContinuations <| fun (resolve, reject, _) ->
-            let xhr = XMLHttpRequest.Create()
-            xhr.``open``(serializeMethod req.method, req.url)
-            xhr.onreadystatechange <- fun _ ->
-                if xhr.readyState = ReadyState.Done
-                then resolve {
-                    responseText =
-                        match xhr.responseType with
-                        | "" -> xhr.responseText
-                        | "text" -> xhr.responseText
-                        | _ -> ""
+#if !FABLE_COMPILER
+        async {
+            return!
+                Async.FromContinuations <| fun (resolve, reject, _) ->
+                    let xhr = XMLHttpRequest.Create()
+                    xhr.``open``(serializeMethod req.method, req.url)
+                    xhr.onreadystatechange <- fun _ ->
+                        if xhr.readyState = ReadyState.Done
+                        then resolve {
+                            responseText =
+                                match xhr.responseType with
+                                | "" -> xhr.responseText
+                                | "text" -> xhr.responseText
+                                | _ -> ""
 
-                    statusCode = int xhr.status
-                    responseType = xhr.responseType
-                    content =
-                        match xhr.responseType with
-                        | ("" | "text") -> ResponseContent.Text xhr.responseText
-                        | "arraybuffer" -> ResponseContent.ArrayBuffer (unbox xhr.response)
-                        | "blob" -> ResponseContent.Blob (unbox xhr.response)
-                        | _ -> ResponseContent.Unknown xhr.response
+                            statusCode = int xhr.status
+                            responseType = xhr.responseType
+                            content =
+                                match xhr.responseType with
+                                | ("" | "text") -> ResponseContent.Text xhr.responseText
+                                | "arraybuffer" -> ResponseContent.ArrayBuffer (unbox xhr.response)
+                                | "blob" -> ResponseContent.Blob (unbox xhr.response)
+                                | _ -> ResponseContent.Unknown xhr.response
 
-                    responseHeaders =
-                        xhr.getAllResponseHeaders()
-                        |> splitAt "\r\n"
-                        |> Array.choose (fun headerLine ->
-                            let parts = splitAt ":" headerLine
-                            match List.ofArray parts with
-                            | key :: rest ->  Some (key.ToLower(), (String.concat ":" rest).Trim())
-                            | otherwise -> None)
-                        |> Map.ofArray
+                            responseHeaders =
+                                xhr.getAllResponseHeaders()
+                                |> splitAt "\r\n"
+                                |> Array.choose (fun headerLine ->
+                                    let parts = splitAt ":" headerLine
+                                    match List.ofArray parts with
+                                    | key :: rest ->  Some (key.ToLower(), (String.concat ":" rest).Trim())
+                                    | otherwise -> None)
+                                |> Map.ofArray
 
-                    responseUrl = xhr.responseURL
-                }
+                            responseUrl = xhr.responseURL
+                        }
 
-            for (Header(key, value)) in req.headers do
-                xhr.setRequestHeader(key, value)
+                    for (Header(key, value)) in req.headers do
+                        xhr.setRequestHeader(key, value)
 
-            xhr.withCredentials <- req.withCredentials
+                    xhr.withCredentials <- req.withCredentials
 
-            match req.overridenMimeType with
-            | Some mimeType -> xhr.overrideMimeType(mimeType)
-            | None -> ()
+                    match req.overridenMimeType with
+                    | Some mimeType -> xhr.overrideMimeType(mimeType)
+                    | None -> ()
 
-            match req.overridenResponseType with
-            | Some ResponseTypes.Text -> xhr.responseType <- "text"
-            | Some ResponseTypes.Blob -> xhr.responseType <- "blob"
-            | Some ResponseTypes.ArrayBuffer -> xhr.responseType <- "arraybuffer"
-            | None -> ()
+                    match req.overridenResponseType with
+                    | Some ResponseTypes.Text -> xhr.responseType <- "text"
+                    | Some ResponseTypes.Blob -> xhr.responseType <- "blob"
+                    | Some ResponseTypes.ArrayBuffer -> xhr.responseType <- "arraybuffer"
+                    | None -> ()
 
-            match req.timeout with
-            | Some timeout -> xhr.timeout <- timeout
-            | None -> ()
+                    match req.timeout with
+                    | Some timeout -> xhr.timeout <- timeout
+                    | None -> ()
 
-            match req.content with 
-            | BodyContent.Empty -> xhr.send()
-            | BodyContent.Text value -> xhr.send(value)
-            | BodyContent.Form formData -> xhr.send(formData)
-            | BodyContent.Binary blob -> xhr.send(blob)
+                    match req.content with 
+                    | BodyContent.Empty -> xhr.send()
+                    | BodyContent.Text value -> xhr.send(value)
+                    | BodyContent.Form formData -> xhr.send(formData)
+                    | BodyContent.Binary blob -> xhr.send(blob)
+        }
 #else
         async {
             try
