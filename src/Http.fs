@@ -187,9 +187,14 @@ module Http =
     let send (req: HttpRequest) : Async<HttpResponse> =
 #if !FABLE_COMPILER
         async {
+            let! ct = Async.CancellationToken
+            
             return!
                 Async.FromContinuations <| fun (resolve, reject, _) ->
                     let xhr = XMLHttpRequest.Create()
+                    
+                    ct.Register (fun _ -> xhr.abort()) |> ignore
+                    
                     xhr.``open``(serializeMethod req.method, req.url)
                     xhr.onreadystatechange <- fun _ ->
                         if xhr.readyState = ReadyState.Done
